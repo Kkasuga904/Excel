@@ -1,16 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 
-export interface AppConfig {
-  port: number;
-  rateLimitWindowMs: number;
-  rateLimitMax: number;
-  requestTimeoutMs: number;
-  allowedOrigins: string[];
-  openAIApiKey: string;
-  openAIModel: string;
-  maxTokens: number;
-  temperature: number;
-}
+dotenv.config();
 
 const parseNumber = (value: string | undefined, fallback: number): number => {
   if (!value) {
@@ -20,38 +10,37 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const parseOrigins = (value: string | undefined): string[] => {
-  if (!value) {
-    return [];
-  }
-  return value
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+const parseList = (value: string | undefined): string[] =>
+  value
+    ?.split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0) ?? [];
+
+export const port = parseNumber(process.env.PORT, 3001);
+export const nodeEnv = process.env.NODE_ENV ?? 'development';
+export const corsOrigin = process.env.CORS_ORIGIN ?? '';
+
+const allowedOrigins = parseList(corsOrigin);
+const rateLimitWindowMs = parseNumber(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
+const rateLimitMax = parseNumber(process.env.RATE_LIMIT_MAX, 100);
+const requestTimeoutMs = parseNumber(process.env.REQUEST_TIMEOUT_MS, 60_000);
+const maxTokens = parseNumber(process.env.MAX_TOKENS, 2000);
+const temperature = parseNumber(process.env.OPENAI_TEMPERATURE, 0.7);
+
+const config = {
+  port,
+  nodeEnv,
+  corsOrigin,
+  allowedOrigins,
+  rateLimitWindowMs,
+  rateLimitMax,
+  requestTimeoutMs,
+  openAIApiKey: process.env.OPENAI_API_KEY ?? '',
+  openAIModel: process.env.OPENAI_MODEL ?? 'gpt-4',
+  maxTokens,
+  temperature
 };
 
-export const loadConfig = (): AppConfig => {
-  const {
-    PORT,
-    RATE_LIMIT_WINDOW_MS,
-    RATE_LIMIT_MAX,
-    REQUEST_TIMEOUT_MS,
-    CORS_ORIGIN,
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    MAX_TOKENS,
-    OPENAI_TEMPERATURE
-  } = process.env;
+export type AppConfig = typeof config;
 
-  return {
-    port: parseNumber(PORT, 3001),
-    rateLimitWindowMs: parseNumber(RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
-    rateLimitMax: parseNumber(RATE_LIMIT_MAX, 100),
-    requestTimeoutMs: parseNumber(REQUEST_TIMEOUT_MS, 60000),
-    allowedOrigins: parseOrigins(CORS_ORIGIN),
-    openAIApiKey: OPENAI_API_KEY ?? '',
-    openAIModel: OPENAI_MODEL ?? 'gpt-4',
-    maxTokens: parseNumber(MAX_TOKENS, 2000),
-    temperature: parseNumber(OPENAI_TEMPERATURE, 0.7)
-  };
-};
+export default config;

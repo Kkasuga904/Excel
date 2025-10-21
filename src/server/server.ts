@@ -1,6 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
-import { loadConfig } from './config';
+import config, { port, nodeEnv } from './config';
 import {
   createRateLimiter,
   createCorsMiddleware,
@@ -24,8 +24,6 @@ import {
 } from './excel-helpers';
 import { prepareChartData } from './excel-advanced';
 import type { ChatRequestBody, CellData } from './types';
-
-const config = loadConfig();
 
 const app = express();
 app.disable('x-powered-by');
@@ -73,7 +71,7 @@ app.post('/api/analyze', requireOpenAIKey(config), async (req, res, next) => {
   try {
     const body = req.body as { cellData?: CellData };
     if (!body.cellData) {
-      return res.status(400).json({ error: 'セルデータが必要です。' });
+      return res.status(400).json({ error: 'Cell data is required.' });
     }
 
     const { values, address } = body.cellData;
@@ -112,7 +110,10 @@ app.post('/api/tools/sort', requireOpenAIKey(config), (req, res) => {
 });
 
 app.post('/api/tools/chart', requireOpenAIKey(config), (req, res) => {
-  const { values, chartType } = req.body as { values: CellData['values']; chartType?: 'LineChart' | 'BarChart' | 'PieChart' };
+  const { values, chartType } = req.body as {
+    values: CellData['values'];
+    chartType?: 'LineChart' | 'BarChart' | 'PieChart';
+  };
   const chart = prepareChartData(values, chartType ?? 'LineChart');
   res.json({ chart });
 });
@@ -120,14 +121,14 @@ app.post('/api/tools/chart', requireOpenAIKey(config), (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(config.port, () => {
+if (nodeEnv !== 'test') {
+  app.listen(port, () => {
     console.log('========================================');
-    console.log(' Excel AI アドイン バックエンドサーバー ');
+    console.log(' Excel AI Add-in Backend Server ');
     console.log('========================================');
-    console.log(`ポート: ${config.port}`);
-    console.log(`環境: ${process.env.NODE_ENV ?? 'development'}`);
-    console.log(`OpenAI APIキー: ${config.openAIApiKey ? '設定済み' : '未設定'}`);
+    console.log(`Port: ${port}`);
+    console.log(`Environment: ${nodeEnv}`);
+    console.log(`OpenAI API Key: ${config.openAIApiKey ? 'configured' : 'missing'}`);
     console.log('========================================');
   });
 }

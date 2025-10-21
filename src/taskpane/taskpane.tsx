@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
+ 
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -20,7 +20,7 @@ const TaskPane: React.FC = () => {
   const [selectedData, setSelectedData] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // メッセージを自動スクロール
+  // 繝｡繝・そ繝ｼ繧ｸ繧定・蜍輔せ繧ｯ繝ｭ繝ｼ繝ｫ
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -29,8 +29,7 @@ const TaskPane: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Office.jsの初期化
-  useEffect(() => {
+  // Office.js縺ｮ蛻晄悄蛹・  useEffect(() => {
     const initOffice = async () => {
       try {
         await Office.onReady();
@@ -38,7 +37,7 @@ const TaskPane: React.FC = () => {
       } catch (error) {
         console.error('Office.js initialization failed:', error);
         addMessage(
-          'Office.jsの初期化に失敗しました。ブラウザを再読み込みしてください。',
+          'Office.js縺ｮ蛻晄悄蛹悶↓螟ｱ謨励＠縺ｾ縺励◆縲ゅヶ繝ｩ繧ｦ繧ｶ繧貞・隱ｭ縺ｿ霎ｼ縺ｿ縺励※縺上□縺輔＞縲・,
           'ai',
           true
         );
@@ -48,7 +47,7 @@ const TaskPane: React.FC = () => {
     initOffice();
   }, []);
 
-  // メッセージを追加
+  // 繝｡繝・そ繝ｼ繧ｸ繧定ｿｽ蜉
   const addMessage = (
     text: string,
     sender: 'user' | 'ai',
@@ -66,8 +65,7 @@ const TaskPane: React.FC = () => {
     setMessages((prev) => [...prev, newMessage]);
   };
 
-  // 選択されたセルデータを取得
-  const getSelectedData = async () => {
+  // 驕ｸ謚槭＆繧後◆繧ｻ繝ｫ繝・・繧ｿ繧貞叙蠕・  const getSelectedData = async () => {
     try {
       return await Excel.run(async (context) => {
         const range = context.workbook.getSelectedRange();
@@ -81,26 +79,25 @@ const TaskPane: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to get selected data:', error);
-      throw new Error('セルデータの取得に失敗しました');
+      throw new Error('繧ｻ繝ｫ繝・・繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆');
     }
   };
 
-  // メッセージ送信
+  // 繝｡繝・そ繝ｼ繧ｸ騾∽ｿ｡
   const handleSendMessage = async (userMessage: string) => {
-    // ユーザーメッセージを追加
+    // 繝ｦ繝ｼ繧ｶ繝ｼ繝｡繝・そ繝ｼ繧ｸ繧定ｿｽ蜉
     addMessage(userMessage, 'user');
     setIsLoading(true);
 
     try {
-      // 選択されたセルデータを取得
-      let cellData = null;
+      // 驕ｸ謚槭＆繧後◆繧ｻ繝ｫ繝・・繧ｿ繧貞叙蠕・      let cellData = null;
       try {
         cellData = await getSelectedData();
         setSelectedData(cellData);
       } catch (error) {
         console.warn('Could not get selected data:', error);
         addMessage(
-          'データが選択されていません。セルを選択してからもう一度お試しください。',
+          '繝・・繧ｿ縺碁∈謚槭＆繧後※縺・∪縺帙ｓ縲ゅそ繝ｫ繧帝∈謚槭＠縺ｦ縺九ｉ繧ゅ≧荳蠎ｦ縺願ｩｦ縺励￥縺縺輔＞縲・,
           'ai',
           true
         );
@@ -108,7 +105,7 @@ const TaskPane: React.FC = () => {
         return;
       }
 
-      // バックエンドにリクエスト送信
+      // 繝舌ャ繧ｯ繧ｨ繝ｳ繝峨↓繝ｪ繧ｯ繧ｨ繧ｹ繝磯∽ｿ｡
       const response = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: {
@@ -126,15 +123,15 @@ const TaskPane: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'API呼び出しに失敗しました');
+        throw new Error(errorData.error || 'API蜻ｼ縺ｳ蜃ｺ縺励↓螟ｱ謨励＠縺ｾ縺励◆');
       }
 
       const result = await response.json();
 
-      // AIの返答を表示
+      // AI縺ｮ霑皮ｭ斐ｒ陦ｨ遉ｺ
       addMessage(result.message, 'ai', false, result.action !== 'none');
 
-      // セルに結果を書き込み
+      // 繧ｻ繝ｫ縺ｫ邨先棡繧呈嶌縺崎ｾｼ縺ｿ
       if (result.action === 'write' && result.data) {
         try {
           await Excel.run(async (context) => {
@@ -145,7 +142,7 @@ const TaskPane: React.FC = () => {
           });
 
           addMessage(
-            `${result.data.address}に結果を書き込みました`,
+            `${result.data.address}縺ｫ邨先棡繧呈嶌縺崎ｾｼ縺ｿ縺ｾ縺励◆`,
             'ai',
             false,
             true
@@ -153,7 +150,7 @@ const TaskPane: React.FC = () => {
         } catch (error) {
           console.error('Failed to write to cell:', error);
           addMessage(
-            'セルへの書き込みに失敗しました。手動で入力してください。',
+            '繧ｻ繝ｫ縺ｸ縺ｮ譖ｸ縺崎ｾｼ縺ｿ縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲よ焔蜍輔〒蜈･蜉帙＠縺ｦ縺上□縺輔＞縲・,
             'ai',
             true
           );
@@ -162,7 +159,7 @@ const TaskPane: React.FC = () => {
     } catch (error) {
       console.error('Error:', error);
       const errorMessage =
-        error instanceof Error ? error.message : 'エラーが発生しました';
+        error instanceof Error ? error.message : '繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆';
       addMessage(errorMessage, 'ai', true);
     } finally {
       setIsLoading(false);
@@ -174,13 +171,11 @@ const TaskPane: React.FC = () => {
       <div className="chat-messages">
         {messages.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">💬</div>
-            <div className="empty-state-title">Excel AI チャットアシスタント</div>
+            <div className="empty-state-icon">町</div>
+            <div className="empty-state-title">Excel AI 繝√Ε繝・ヨ繧｢繧ｷ繧ｹ繧ｿ繝ｳ繝・/div>
             <div className="empty-state-description">
-              Excelのセルを選択して、自然言語で指示してください。
-              <br />
-              データ分析、操作、レポート作成などが可能です。
-            </div>
+              Excel縺ｮ繧ｻ繝ｫ繧帝∈謚槭＠縺ｦ縲∬・辟ｶ險隱槭〒謖・､ｺ縺励※縺上□縺輔＞縲・              <br />
+              繝・・繧ｿ蛻・梵縲∵桃菴懊√Ξ繝昴・繝井ｽ懈・縺ｪ縺ｩ縺悟庄閭ｽ縺ｧ縺吶・            </div>
           </div>
         ) : (
           <>
@@ -194,7 +189,7 @@ const TaskPane: React.FC = () => {
                 isSuccess={msg.isSuccess}
               />
             ))}
-            {isLoading && <LoadingSpinner message="処理中..." />}
+            {isLoading && <LoadingSpinner message="蜃ｦ逅・ｸｭ..." />}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -202,13 +197,15 @@ const TaskPane: React.FC = () => {
       <ChatInput
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
-        placeholder="例: このデータを分析して"
+        placeholder="萓・ 縺薙・繝・・繧ｿ繧貞・譫舌＠縺ｦ"
       />
     </div>
   );
 };
 
-// React アプリケーションをマウント
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(<TaskPane />);
+// React 繧｢繝励Μ繧ｱ繝ｼ繧ｷ繝ｧ繝ｳ繧偵・繧ｦ繝ｳ繝・const root = ReactDOM.createRoot(document.getElementById('root')!);
 
+
+
+
+export default TaskPane;
