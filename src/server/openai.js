@@ -54,20 +54,23 @@ async function chat(userMessage, cellData, messageHistory = []) {
     ];
 
     // OpenAI APIを呼び出し
-    const response = await client.messages.create({
+    const response = await client.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4',
       max_tokens: parseInt(process.env.MAX_TOKENS || '2000'),
-      system: SYSTEM_PROMPT,
-      messages: messages
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...messages
+      ],
+      temperature: 0.7
     });
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type from OpenAI');
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from OpenAI');
     }
 
     // JSONレスポンスをパース
-    const result = parseAIResponse(content.text);
+    const result = parseAIResponse(content);
 
     // セルデータに基づいて結果を処理
     if (result.action !== 'none' && cellData) {
