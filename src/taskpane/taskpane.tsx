@@ -1,10 +1,11 @@
-﻿declare const Office: any;
-declare const Excel: any;
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import LoadingSpinner from './components/LoadingSpinner';
 import './taskpane.css';
+
+declare const Office: any;
+declare const Excel: any;
 
 interface Message {
   id: string;
@@ -15,12 +16,19 @@ interface Message {
   isSuccess?: boolean;
 }
 
-type RangeData = Excel.Interfaces.RangeData;
+interface RangeData {
+  values: unknown[][];
+  address: string;
+  formulas: unknown[][];
+}
+
 
 const TaskPane: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedData, setSelectedData] = useState<RangeData | null>(null);
+  const [officeInitialized, setOfficeInitialized] = useState(false);
+  const [isStandaloneMode, setIsStandaloneMode] = useState(false);
+  const standaloneNoticeShown = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiBase = useMemo(() => process.env.REACT_APP_API_BASE_URL ?? '', []);
 
@@ -37,40 +45,64 @@ const TaskPane: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  const addMessage = useCallback(
+    (
+      text: string,
+      sender: 'user' | 'ai',
+      isError: boolean = false,
+      isSuccess: boolean = false
+    ) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          text,
+          sender,
+          timestamp: new Date(),
+          isError,
+          isSuccess
+        }
+      ]);
+    },
+    []
+  );
+
   useEffect(() => {
-    // Initialize Office.js
     const initOffice = async () => {
       try {
-        await Office.onReady();
+        if (typeof Office !== 'undefined' && typeof Office.onReady === 'function') {
+          const info = await Office.onReady();
+          if (!info || !info.host) {
+            console.warn('Office.js は Excel 環境外で読み込まれています。スタンドアロンモードで起動します。');
+            setIsStandaloneMode(true);
+          }
+        } else {
+          console.warn('Office.js が見つかりません。Excel 以外の環境で開かれています。');
+          setIsStandaloneMode(true);
+        }
       } catch (error) {
-        console.error('Office.js の初期化に失敗しました。ブラウザを再読み込みしてください。', error);
-        addMessage('Office.js の初期化に失敗しました。ブラウザを再読み込みしてください。', 'ai', true);
+        console.error('Office.js の初期化に失敗しました。スタンドアロンモードで継続します。', error);
+        setIsStandaloneMode(true);
+        addMessage(
+          'Office.js の初期化に失敗しました。ブラウザ単体では Excel の機能は利用できませんが、チャットは継続できます。',
+          'ai',
+          true
+        );
+      } finally {
+        setOfficeInitialized(true);
       }
     };
 
     void initOffice();
-  }, []);
-
-  const addMessage = (
-    text: string,
-    sender: 'user' | 'ai',
-    isError: boolean = false,
-    isSuccess: boolean = false
-  ) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text,
-      sender,
-      timestamp: new Date(),
-      isError,
-      isSuccess
-    };
-    setMessages((prev) => [...prev, newMessage]);
-  };
+  }, [addMessage]);
 
   const getSelectedData = async (): Promise<RangeData> => {
+    if (typeof Excel === 'undefined' || typeof Excel.run !== 'function') {
+      throw new Error('Excel 対応の環境ではありません。');
+    }
+
     try {
-      return await Excel.run(async (context: Excel.RequestContext) => {
+      return await Excel.run(async (context: any) => {
         const range = context.workbook.getSelectedRange();
         range.load('values, address, formulas');
         await context.sync();
@@ -82,7 +114,7 @@ const TaskPane: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to get selected data:', error);
-      throw new Error('セル範囲の取得に失敗しました。');
+      throw new Error('選択範囲の取得に失敗しました。');
     }
   };
 
@@ -92,13 +124,34 @@ const TaskPane: React.FC = () => {
 
     try {
       let cellData: RangeData | null = null;
+      let abortRequest = false;
+
       try {
         cellData = await getSelectedData();
-        setSelectedData(cellData);
       } catch (error) {
         console.warn('Selection read failed:', error);
-        addMessage('セル範囲が選択されていません。セルを選択してからもう一度お試しください。', 'ai', true);
-        setIsLoading(false);
+        const detail =
+          error instanceof Error ? error.message : '選択範囲の取得に失敗しました。';
+
+        if (detail === 'Excel 対応の環境ではありません。') {
+          if (!standaloneNoticeShown.current) {
+            addMessage(
+              'Excel 以外の環境ではセルの内容を取得できませんが、チャットは利用できます。',
+              'ai'
+            );
+            standaloneNoticeShown.current = true;
+          }
+        } else {
+          addMessage(
+            'セル範囲を取得できませんでした。セルを選択してからもう一度お試しください。',
+            'ai',
+            true
+          );
+          abortRequest = true;
+        }
+      }
+
+      if (abortRequest) {
         return;
       }
 
@@ -118,8 +171,8 @@ const TaskPane: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'API 呼び出しに失敗しました。');
+        const errorData = await response.json().catch(() => undefined);
+        throw new Error(errorData?.error || 'API へのリクエストに失敗しました。');
       }
 
       const result = await response.json();
@@ -127,7 +180,7 @@ const TaskPane: React.FC = () => {
 
       if (result.action === 'write' && result.data) {
         try {
-          await Excel.run(async (context: Excel.RequestContext) => {
+          await Excel.run(async (context: any) => {
             const sheet = context.workbook.worksheets.getActiveWorksheet();
             const range = sheet.getRange(result.data.address);
             range.values = result.data.values;
@@ -137,7 +190,7 @@ const TaskPane: React.FC = () => {
           addMessage(`${result.data.address} に結果を書き込みました。`, 'ai', false, true);
         } catch (error) {
           console.error('Failed to write to cell:', error);
-          addMessage('セルへの書き込みに失敗しました。手動で入力してください。', 'ai', true);
+          addMessage('セルへの書き込みに失敗しました。Excel 上で再度お試しください。', 'ai', true);
         }
       }
     } catch (error) {
@@ -149,48 +202,74 @@ const TaskPane: React.FC = () => {
     }
   };
 
-  return (
-    <div className="chat-container">
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">💬</div>
-            <div className="empty-state-title">Excel AI チャットアシスタントチャットアシスタント</div>
-            <div className="empty-state-description">
-              Excel のセルを選択して、自然言語で指示してください。
-              <br />
-              データ分析、操作、レポート作成をサポートします。
-            </div>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg) => (
-              <ChatMessage
-                key={msg.id}
-                message={msg.text}
-                sender={msg.sender}
-                timestamp={msg.timestamp}
-                isError={msg.isError}
-                isSuccess={msg.isSuccess}
-              />
-            ))}
-            {isLoading && <LoadingSpinner message="処理中..." />}
-            <div ref={messagesEndRef} />
-          </>
-        )}
+  if (!officeInitialized) {
+    return (
+      <div className="chat-container">
+        <div className="chat-messages">
+          <LoadingSpinner message="Office.js を初期化しています..." />
+        </div>
       </div>
-      <ChatInput
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-        placeholder="例: このデータを分析して"
-      />
+    );
+  }
+
+  return (
+    <div className="taskpane-root">
+      <div className="chat-shell">
+        <header className="chat-header">
+          <h1>Excel AI チャットアシスタント</h1>
+          <p>Excel の選択範囲と会話しながら作業を進めるための補助ツールです。</p>
+        </header>
+        {isStandaloneMode && (
+          <div className="standalone-banner">
+            Excel 以外の環境で動作しています。セルの読み取り・書き込みは無効ですが、チャットは利用できます。
+          </div>
+        )}
+        <div className="chat-container">
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">💬</div>
+                <div className="empty-state-title">Excel AI チャットアシスタント</div>
+                <div className="empty-state-description">
+                  Excel でセル範囲を選択してから質問すると、選択中のデータを基に回答します。
+                  <br />
+                  ブラウザ単体ではセルの取得はできませんが、チャットでの相談が可能です。
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg) => (
+                  <ChatMessage
+                    key={msg.id}
+                    message={msg.text}
+                    sender={msg.sender}
+                    timestamp={msg.timestamp}
+                    isError={msg.isError}
+                    isSuccess={msg.isSuccess}
+                  />
+                ))}
+                {isLoading && <LoadingSpinner message="考えています..." />}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            placeholder="例: この表を要約して"
+          />
+        </div>
+      </div>
+      <details className="info-panel">
+        <summary>使い方とヒント</summary>
+        <ul>
+          <li>Excel でセル範囲を選択すると、そのデータをコンテキストに回答します。</li>
+          <li>「表を整形して」「グラフを作成して」などの指示で具体的な操作案を得られます。</li>
+          <li>ブラウザでのテストを終えたら README の手順で sideload し、本番環境で確認してください。</li>
+        </ul>
+      </details>
     </div>
   );
 };
 
 export default TaskPane;
-
-
-
-
-

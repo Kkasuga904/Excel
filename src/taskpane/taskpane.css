@@ -1,3 +1,73 @@
+.taskpane-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.chat-header {
+  padding: 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #323130;
+  margin-bottom: 4px;
+}
+
+.chat-header p {
+  font-size: 13px;
+  color: #605e5c;
+}
+
+.standalone-banner {
+  margin: 12px 16px 0;
+  padding: 12px;
+  background-color: #fff4ce;
+  border-left: 4px solid #ffb900;
+  border-radius: 6px;
+  color: #3b3a39;
+  font-size: 13px;
+}
+
+.info-panel {
+  margin: 16px;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #323130;
+  font-size: 13px;
+}
+
+.info-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  outline: none;
+}
+
+.info-panel ul {
+  margin-top: 12px;
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-panel[open] {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
 /* グローバルスタイル */
 * {
   margin: 0;
@@ -22,7 +92,7 @@ body {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
   background-color: #ffffff;
   border-left: 1px solid #e0e0e0;
 }
