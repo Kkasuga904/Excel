@@ -39,6 +39,31 @@
   font-size: 13px;
 }
 
+.status-banner {
+  margin: 12px 16px 0;
+  padding: 12px;
+  border-left: 4px solid #107c10;
+  border-radius: 6px;
+  background-color: #dffcf0;
+  color: #107c10;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-banner.status-loading {
+  border-left-color: #ffb900;
+  background-color: #fff4ce;
+  color: #ff8c00;
+}
+
+.status-banner.status-error {
+  border-left-color: #a4373a;
+  background-color: #fde7e9;
+  color: #a4373a;
+}
+
 .info-panel {
   margin: 16px;
   background-color: #ffffff;

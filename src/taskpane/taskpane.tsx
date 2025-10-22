@@ -22,12 +22,21 @@ interface RangeData {
   formulas: unknown[][];
 }
 
+interface HealthStatus {
+  state: 'loading' | 'success' | 'error';
+  message: string;
+}
 
-const TaskPane: React.FC = () => {
+interface TaskPaneProps {
+  healthStatus?: HealthStatus;
+}
+
+const TaskPane: React.FC<TaskPaneProps> = ({ healthStatus }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [officeInitialized, setOfficeInitialized] = useState(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
+  const [hostName, setHostName] = useState<string | null>(null);
   const standaloneNoticeShown = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiBase = useMemo(() => process.env.REACT_APP_API_BASE_URL ?? '', []);
@@ -68,32 +77,59 @@ const TaskPane: React.FC = () => {
   );
 
   useEffect(() => {
+    let cancelled = false;
+
     const initOffice = async () => {
+      if (typeof Office === 'undefined' || typeof Office.onReady !== 'function') {
+        console.warn('Office.js が見つかりません。Excel 以外の環境で開かれています。');
+        if (!cancelled) {
+          setIsStandaloneMode(true);
+          setHostName(null);
+          setOfficeInitialized(true);
+        }
+        return;
+      }
+
       try {
-        if (typeof Office !== 'undefined' && typeof Office.onReady === 'function') {
-          const info = await Office.onReady();
-          if (!info || !info.host) {
-            console.warn('Office.js は Excel 環境外で読み込まれています。スタンドアロンモードで起動します。');
-            setIsStandaloneMode(true);
-          }
+        const info = await Office.onReady();
+        if (cancelled) {
+          return;
+        }
+
+        const detectedHost = typeof info?.host === 'string' ? info.host : null;
+        setHostName(detectedHost);
+
+        if (detectedHost && detectedHost.toLowerCase() === 'excel') {
+          setIsStandaloneMode(false);
         } else {
-          console.warn('Office.js が見つかりません。Excel 以外の環境で開かれています。');
+          console.warn(
+            `Office.js は Excel 以外のホスト (${detectedHost ?? '不明'}) で読み込まれました。スタンドアロンモードで起動します。`
+          );
           setIsStandaloneMode(true);
         }
       } catch (error) {
-        console.error('Office.js の初期化に失敗しました。スタンドアロンモードで継続します。', error);
-        setIsStandaloneMode(true);
-        addMessage(
-          'Office.js の初期化に失敗しました。ブラウザ単体では Excel の機能は利用できませんが、チャットは継続できます。',
-          'ai',
-          true
-        );
+        if (!cancelled) {
+          console.error('Office.js の初期化に失敗しました。スタンドアロンモードで継続します。', error);
+          setIsStandaloneMode(true);
+          setHostName(null);
+          addMessage(
+            'Office.js の初期化に失敗しました。ブラウザ単体では Excel の機能は利用できませんが、チャットは継続できます。',
+            'ai',
+            true
+          );
+        }
       } finally {
-        setOfficeInitialized(true);
+        if (!cancelled) {
+          setOfficeInitialized(true);
+        }
       }
     };
 
     void initOffice();
+
+    return () => {
+      cancelled = true;
+    };
   }, [addMessage]);
 
   const getSelectedData = async (): Promise<RangeData> => {
@@ -126,22 +162,11 @@ const TaskPane: React.FC = () => {
       let cellData: RangeData | null = null;
       let abortRequest = false;
 
-      try {
-        cellData = await getSelectedData();
-      } catch (error) {
-        console.warn('Selection read failed:', error);
-        const detail =
-          error instanceof Error ? error.message : '選択範囲の取得に失敗しました。';
-
-        if (detail === 'Excel 対応の環境ではありません。') {
-          if (!standaloneNoticeShown.current) {
-            addMessage(
-              'Excel 以外の環境ではセルの内容を取得できませんが、チャットは利用できます。',
-              'ai'
-            );
-            standaloneNoticeShown.current = true;
-          }
-        } else {
+      if (!isStandaloneMode) {
+        try {
+          cellData = await getSelectedData();
+        } catch (error) {
+          console.warn('Selection read failed:', error);
           addMessage(
             'セル範囲を取得できませんでした。セルを選択してからもう一度お試しください。',
             'ai',
@@ -149,6 +174,12 @@ const TaskPane: React.FC = () => {
           );
           abortRequest = true;
         }
+      } else if (!standaloneNoticeShown.current) {
+        addMessage(
+          'Excel 以外の環境ではセルの内容を取得できませんが、チャットは利用できます。',
+          'ai'
+        );
+        standaloneNoticeShown.current = true;
       }
 
       if (abortRequest) {
@@ -179,18 +210,22 @@ const TaskPane: React.FC = () => {
       addMessage(result.message, 'ai', false, result.action !== 'none');
 
       if (result.action === 'write' && result.data) {
-        try {
-          await Excel.run(async (context: any) => {
-            const sheet = context.workbook.worksheets.getActiveWorksheet();
-            const range = sheet.getRange(result.data.address);
-            range.values = result.data.values;
-            await context.sync();
-          });
+        if (isStandaloneMode) {
+          addMessage('現在の環境ではセルへの書き込みは行えません。Excel 上で実行してください。', 'ai', true);
+        } else {
+          try {
+            await Excel.run(async (context: any) => {
+              const sheet = context.workbook.worksheets.getActiveWorksheet();
+              const range = sheet.getRange(result.data.address);
+              range.values = result.data.values;
+              await context.sync();
+            });
 
-          addMessage(`${result.data.address} に結果を書き込みました。`, 'ai', false, true);
-        } catch (error) {
-          console.error('Failed to write to cell:', error);
-          addMessage('セルへの書き込みに失敗しました。Excel 上で再度お試しください。', 'ai', true);
+            addMessage(`${result.data.address} に結果を書き込みました。`, 'ai', false, true);
+          } catch (error) {
+            console.error('Failed to write to cell:', error);
+            addMessage('セルへの書き込みに失敗しました。Excel 上で再度お試しください。', 'ai', true);
+          }
         }
       }
     } catch (error) {
@@ -219,9 +254,14 @@ const TaskPane: React.FC = () => {
           <h1>Excel AI チャットアシスタント</h1>
           <p>Excel の選択範囲と会話しながら作業を進めるための補助ツールです。</p>
         </header>
+        {healthStatus && (
+          <div className={`status-banner status-${healthStatus.state}`}>
+            {healthStatus.message}
+          </div>
+        )}
         {isStandaloneMode && (
           <div className="standalone-banner">
-            Excel 以外の環境で動作しています。セルの読み取り・書き込みは無効ですが、チャットは利用できます。
+            Excel 以外の環境{hostName ? `（${hostName}）` : ''}で動作しています。セルの読み取り・書き込みは無効ですが、チャットは利用できます。
           </div>
         )}
         <div className="chat-container">
