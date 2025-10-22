@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import helmet from 'helmet';
 import config, { port, nodeEnv } from './config';
 import {
@@ -27,6 +27,7 @@ import type { ChatRequestBody, CellData } from './types';
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(helmet());
@@ -71,7 +72,7 @@ app.post('/api/analyze', requireOpenAIKey(config), async (req, res, next) => {
   try {
     const body = req.body as { cellData?: CellData };
     if (!body.cellData) {
-      return res.status(400).json({ error: 'Cell data is required.' });
+      return res.status(400).json({ error: 'セルデータが必要です。' });
     }
 
     const { values, address } = body.cellData;
@@ -121,16 +122,18 @@ app.post('/api/tools/chart', requireOpenAIKey(config), (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-if (nodeEnv !== 'test') {
+if (nodeEnv !== "test") {
   app.listen(port, () => {
-    console.log('========================================');
-    console.log(' Excel AI Add-in Backend Server ');
-    console.log('========================================');
+    console.log("========================================");
+    console.log(" Excel AI Add-in Backend Server ");
+    console.log("========================================");
     console.log(`Port: ${port}`);
     console.log(`Environment: ${nodeEnv}`);
     console.log(`OpenAI API Key: ${config.openAIApiKey ? 'configured' : 'missing'}`);
-    console.log('========================================');
+    console.log("========================================");
   });
 }
 
 export default app;
+
+

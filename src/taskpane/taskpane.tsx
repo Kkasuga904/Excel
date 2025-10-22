@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
- 
+﻿declare const Office: any;
+declare const Excel: any;
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -14,13 +15,20 @@ interface Message {
   isSuccess?: boolean;
 }
 
+type RangeData = Excel.Interfaces.RangeData;
+
 const TaskPane: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedData, setSelectedData] = useState<any>(null);
+  const [selectedData, setSelectedData] = useState<RangeData | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const apiBase = useMemo(() => process.env.REACT_APP_API_BASE_URL ?? '', []);
 
-  // 繝｡繝・そ繝ｼ繧ｸ繧定・蜍輔せ繧ｯ繝ｭ繝ｼ繝ｫ
+  const buildUrl = (path: string) => {
+    const normalizedBase = apiBase.replace(/\/+$/, '');
+    return `${normalizedBase}${path}`;
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -29,25 +37,20 @@ const TaskPane: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Office.js縺ｮ蛻晄悄蛹・  useEffect(() => {
+  useEffect(() => {
+    // Initialize Office.js
     const initOffice = async () => {
       try {
         await Office.onReady();
-        console.log('Office.js initialized');
       } catch (error) {
-        console.error('Office.js initialization failed:', error);
-        addMessage(
-          'Office.js縺ｮ蛻晄悄蛹悶↓螟ｱ謨励＠縺ｾ縺励◆縲ゅヶ繝ｩ繧ｦ繧ｶ繧貞・隱ｭ縺ｿ霎ｼ縺ｿ縺励※縺上□縺輔＞縲・,
-          'ai',
-          true
-        );
+        console.error('Office.js の初期化に失敗しました。ブラウザを再読み込みしてください。', error);
+        addMessage('Office.js の初期化に失敗しました。ブラウザを再読み込みしてください。', 'ai', true);
       }
     };
 
-    initOffice();
+    void initOffice();
   }, []);
 
-  // 繝｡繝・そ繝ｼ繧ｸ繧定ｿｽ蜉
   const addMessage = (
     text: string,
     sender: 'user' | 'ai',
@@ -65,9 +68,9 @@ const TaskPane: React.FC = () => {
     setMessages((prev) => [...prev, newMessage]);
   };
 
-  // 驕ｸ謚槭＆繧後◆繧ｻ繝ｫ繝・・繧ｿ繧貞叙蠕・  const getSelectedData = async () => {
+  const getSelectedData = async (): Promise<RangeData> => {
     try {
-      return await Excel.run(async (context) => {
+      return await Excel.run(async (context: Excel.RequestContext) => {
         const range = context.workbook.getSelectedRange();
         range.load('values, address, formulas');
         await context.sync();
@@ -75,45 +78,38 @@ const TaskPane: React.FC = () => {
           values: range.values,
           address: range.address,
           formulas: range.formulas
-        };
+        } as RangeData;
       });
     } catch (error) {
       console.error('Failed to get selected data:', error);
-      throw new Error('繧ｻ繝ｫ繝・・繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆');
+      throw new Error('セル範囲の取得に失敗しました。');
     }
   };
 
-  // 繝｡繝・そ繝ｼ繧ｸ騾∽ｿ｡
   const handleSendMessage = async (userMessage: string) => {
-    // 繝ｦ繝ｼ繧ｶ繝ｼ繝｡繝・そ繝ｼ繧ｸ繧定ｿｽ蜉
     addMessage(userMessage, 'user');
     setIsLoading(true);
 
     try {
-      // 驕ｸ謚槭＆繧後◆繧ｻ繝ｫ繝・・繧ｿ繧貞叙蠕・      let cellData = null;
+      let cellData: RangeData | null = null;
       try {
         cellData = await getSelectedData();
         setSelectedData(cellData);
       } catch (error) {
-        console.warn('Could not get selected data:', error);
-        addMessage(
-          '繝・・繧ｿ縺碁∈謚槭＆繧後※縺・∪縺帙ｓ縲ゅそ繝ｫ繧帝∈謚槭＠縺ｦ縺九ｉ繧ゅ≧荳蠎ｦ縺願ｩｦ縺励￥縺縺輔＞縲・,
-          'ai',
-          true
-        );
+        console.warn('Selection read failed:', error);
+        addMessage('セル範囲が選択されていません。セルを選択してからもう一度お試しください。', 'ai', true);
         setIsLoading(false);
         return;
       }
 
-      // 繝舌ャ繧ｯ繧ｨ繝ｳ繝峨↓繝ｪ繧ｯ繧ｨ繧ｹ繝磯∽ｿ｡
-      const response = await fetch('http://localhost:3001/api/chat', {
+      const response = await fetch(buildUrl('/api/chat'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           message: userMessage,
-          cellData: cellData,
+          cellData,
           messageHistory: messages.map((m) => ({
             role: m.sender === 'user' ? 'user' : 'assistant',
             content: m.text
@@ -123,44 +119,31 @@ const TaskPane: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'API蜻ｼ縺ｳ蜃ｺ縺励↓螟ｱ謨励＠縺ｾ縺励◆');
+        throw new Error(errorData.error || 'API 呼び出しに失敗しました。');
       }
 
       const result = await response.json();
-
-      // AI縺ｮ霑皮ｭ斐ｒ陦ｨ遉ｺ
       addMessage(result.message, 'ai', false, result.action !== 'none');
 
-      // 繧ｻ繝ｫ縺ｫ邨先棡繧呈嶌縺崎ｾｼ縺ｿ
       if (result.action === 'write' && result.data) {
         try {
-          await Excel.run(async (context) => {
+          await Excel.run(async (context: Excel.RequestContext) => {
             const sheet = context.workbook.worksheets.getActiveWorksheet();
             const range = sheet.getRange(result.data.address);
             range.values = result.data.values;
             await context.sync();
           });
 
-          addMessage(
-            `${result.data.address}縺ｫ邨先棡繧呈嶌縺崎ｾｼ縺ｿ縺ｾ縺励◆`,
-            'ai',
-            false,
-            true
-          );
+          addMessage(`${result.data.address} に結果を書き込みました。`, 'ai', false, true);
         } catch (error) {
           console.error('Failed to write to cell:', error);
-          addMessage(
-            '繧ｻ繝ｫ縺ｸ縺ｮ譖ｸ縺崎ｾｼ縺ｿ縺ｫ螟ｱ謨励＠縺ｾ縺励◆縲よ焔蜍輔〒蜈･蜉帙＠縺ｦ縺上□縺輔＞縲・,
-            'ai',
-            true
-          );
+          addMessage('セルへの書き込みに失敗しました。手動で入力してください。', 'ai', true);
         }
       }
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage =
-        error instanceof Error ? error.message : '繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆';
-      addMessage(errorMessage, 'ai', true);
+      const message = error instanceof Error ? error.message : 'エラーが発生しました。';
+      addMessage(message, 'ai', true);
     } finally {
       setIsLoading(false);
     }
@@ -171,11 +154,13 @@ const TaskPane: React.FC = () => {
       <div className="chat-messages">
         {messages.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">町</div>
-            <div className="empty-state-title">Excel AI 繝√Ε繝・ヨ繧｢繧ｷ繧ｹ繧ｿ繝ｳ繝・/div>
+            <div className="empty-state-icon">💬</div>
+            <div className="empty-state-title">Excel AI チャットアシスタントチャットアシスタント</div>
             <div className="empty-state-description">
-              Excel縺ｮ繧ｻ繝ｫ繧帝∈謚槭＠縺ｦ縲∬・辟ｶ險隱槭〒謖・､ｺ縺励※縺上□縺輔＞縲・              <br />
-              繝・・繧ｿ蛻・梵縲∵桃菴懊√Ξ繝昴・繝井ｽ懈・縺ｪ縺ｩ縺悟庄閭ｽ縺ｧ縺吶・            </div>
+              Excel のセルを選択して、自然言語で指示してください。
+              <br />
+              データ分析、操作、レポート作成をサポートします。
+            </div>
           </div>
         ) : (
           <>
@@ -189,7 +174,7 @@ const TaskPane: React.FC = () => {
                 isSuccess={msg.isSuccess}
               />
             ))}
-            {isLoading && <LoadingSpinner message="蜃ｦ逅・ｸｭ..." />}
+            {isLoading && <LoadingSpinner message="処理中..." />}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -197,15 +182,15 @@ const TaskPane: React.FC = () => {
       <ChatInput
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
-        placeholder="萓・ 縺薙・繝・・繧ｿ繧貞・譫舌＠縺ｦ"
+        placeholder="例: このデータを分析して"
       />
     </div>
   );
 };
 
-// React 繧｢繝励Μ繧ｱ繝ｼ繧ｷ繝ｧ繝ｳ繧偵・繧ｦ繝ｳ繝・const root = ReactDOM.createRoot(document.getElementById('root')!);
-
-
-
-
 export default TaskPane;
+
+
+
+
+

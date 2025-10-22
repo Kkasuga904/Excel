@@ -22,13 +22,7 @@ describe('excel-helpers', () => {
   });
 
   it('detects outliers using IQR', () => {
-    const sample = [
-      [10],
-      [12],
-      [14],
-      [15],
-      [99]
-    ];
+    const sample = [[10], [12], [14], [15], [99]];
     const outliers = detectOutliers(sample);
     expect(outliers).toContain(99);
     expect(outliers.length).toBe(1);
@@ -48,7 +42,7 @@ describe('excel-helpers', () => {
   it('generates monthly report when statistics available', () => {
     const report = generateMonthlyReport(values, { address: 'A1:C3', values });
     expect(report).not.toBeNull();
-    expect(report?.[0][0]).toBe('æœˆæ¬¡ãƒ¬ãƒãƒ¼ãƒˆ');
+    expect(report?.[0][0]).toBe('ŒŽŽŸƒŒƒ|[ƒg');
     expect(report?.[5][1]).toBe('45.00');
   });
 
@@ -65,3 +59,5 @@ describe('excel-helpers', () => {
     expect(sorted[2][0]).toBe('A');
   });
 });
+
+
