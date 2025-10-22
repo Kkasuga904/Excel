@@ -1,12 +1,12 @@
-import {
+const {
   calculateStatistics,
   detectOutliers,
   fillBlankCells,
   generateMonthlyReport,
   sortData
-} from '../src/server/excel-helpers';
+} = require('../dist/server/excel-helpers');
 
-describe('excel-helpers', () => {
+describe('excel-helpers (compiled)', () => {
   const values = [
     [1, 2, 3],
     [4, 5, 6],
@@ -16,9 +16,9 @@ describe('excel-helpers', () => {
   it('calculates statistics with sorted median', () => {
     const stats = calculateStatistics(values);
     expect(stats).not.toBeNull();
-    expect(stats?.median).toBe('5.00');
-    expect(stats?.sum).toBe('45.00');
-    expect(stats?.count).toBe(9);
+    expect(stats.median).toBe('5.00');
+    expect(stats.sum).toBe('45.00');
+    expect(stats.count).toBe(9);
   });
 
   it('detects outliers using IQR', () => {
@@ -42,8 +42,8 @@ describe('excel-helpers', () => {
   it('generates monthly report when statistics available', () => {
     const report = generateMonthlyReport(values, { address: 'A1:C3', values });
     expect(report).not.toBeNull();
-    expect(report?.[0][0]).toBe('ŒŽŽŸƒŒƒ|[ƒg');
-    expect(report?.[5][1]).toBe('45.00');
+    expect(report[0][0]).toBe('æœˆæ¬¡ãƒ¬ãƒãƒ¼ãƒˆ');
+    expect(report[5][1]).toBe('45.00');
   });
 
   it('sorts data by numeric column', () => {
@@ -59,5 +59,3 @@ describe('excel-helpers', () => {
     expect(sorted[2][0]).toBe('A');
   });
 });
-
-
